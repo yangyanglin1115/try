@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>高效能線上簽名產生器</title>
+  <style>
+    body {
+      font-family: "Microsoft JhengHei", sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    canvas {
+      border: 2px dashed #888;
+      border-radius: 8px;
+      background-color: white;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    button {
+      margin: 10px 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+    #clearBtn { background-color: #f44336; color: white; }
+    #saveBtn { background-color: #4CAF50; color: white; }
+    #undoBtn { background-color: #2196F3; color: white; }
+    #formBtn { background-color: #FF9800; color: white; }
+  </style>
+</head>
+<body>
+  <h2>第一步：在格子內簽名，若簽壞了可點清除簽名</h2>
+  <canvas id="signatureCanvas" width="500" height="200"></canvas>
+  <br />
+  <button id="clearBtn">清除簽名</button>
+  <button id="undoBtn">復原</button>
+  <br /><br />
+
+  <h2>第二步：儲存簽名圖檔</h2>
+  <p>簽好後，點擊下方「下載簽名」按鈕</p>
+  <button id="saveBtn">下載簽名</button>
+
+  <h2>⬆️ 第三步：回傳至 Google 表單</h2>
+  <p>完成簽名並下載後，點擊下方按鈕開啟 Google 表單，上傳圖片檔案。</p>
+  <a href="https://docs.google.com/forms/d/e/1FAIpQLSc6ItA432bbJv3Q4A0-M-8AqSNqoUnjgNpfp-TQWmII7uvbmw/viewform?usp=dialog" target="_blank">
+    <button id="formBtn">前往上傳表單</button>
+  </a>
+
+  <script>
+    const canvas = document.getElementById("signatureCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let drawing = false;
+    let paths = [];
+    let currentPath = [];
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+
+    // Retina 畫布支援
+    function adjustCanvasForHiDPI() {
+      const ratio = window.devicePixelRatio || 1;
+      const w = canvas.width;
+      const h = canvas.height;
+      canvas.width = w * ratio;
+      canvas.height = h * ratio;
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      ctx.scale(ratio, ratio);
+    }
+    adjustCanvasForHiDPI();
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      if (e.touches) e = e.touches[0];
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const path of paths) {
+        ctx.beginPath();
+        for (let i = 0; i < path.length; i++) {
+          const pt = path[i];
+          i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    function startDraw(e) {
+      drawing = true;
+      currentPath = [];
+      const pos = getPos(e);
+      currentPath.push(pos);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    }
+
+    // 節流：減少繪圖頻率
+    let lastDrawTime = 0;
+    function draw(e) {
+      const now = Date.now();
+      if (now - lastDrawTime < 10) return;
+      lastDrawTime = now;
+
+      if (!drawing) return;
+      const pos = getPos(e);
+      const lastPos = currentPath[currentPath.length - 1];
+      currentPath.push(pos);
+
+      ctx.beginPath();
+      ctx.moveTo(lastPos.x, lastPos.y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    }
+
+    function stopDraw() {
+      if (!drawing) return;
+      drawing = false;
+      if (currentPath.length > 1) {
+        paths.push(currentPath);
+      }
+      currentPath = [];
+    }
+
+    // 事件綁定
+    canvas.addEventListener("mousedown", startDraw);
+    canvas.addEventListener("mousemove", draw);
+    canvas.addEventListener("mouseup", stopDraw);
+    canvas.addEventListener("mouseleave", stopDraw);
+
+    canvas.addEventListener("touchstart", startDraw, { passive: true });
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      draw(e);
+    }, { passive: false });
+    canvas.addEventListener("touchend", stopDraw);
+
+    // 清除按鈕
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      paths = [];
+      currentPath = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    // 復原按鈕
+    document.getElementById("undoBtn").addEventListener("click", () => {
+      paths.pop();
+      redraw();
+    });
+
+    // 儲存圖檔
+    document.getElementById("saveBtn").addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "signature.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+  </script>
+</body>
+</html>
